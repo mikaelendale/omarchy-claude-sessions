@@ -24,6 +24,8 @@ Hover over the icon for a summary such as "1 needs you · 2 working".
 
 In the panel, `n` also starts a new session.
 
+The panel never scrolls. While there's room, each session gets two lines. When there are more sessions than fit, the rest drop to one line, except the ones that need you, which keep the line saying why. If even that won't fit, the least pressing sessions fold into one "N more · show all" row, which opens the Super+Shift+C conversations picker (from the notch plugin).
+
 ## Notifications
 
 When a session starts needing you and you aren't looking at its window, a notification appears. Clicking it jumps to the session, and it goes away by itself once you've answered. To change this, set `notify` in the widget's settings to `Unfocused` (the default), `Always` or `Off`.
@@ -36,6 +38,7 @@ The widget answers on IPC, so you can bind a key to "take me to what needs me":
 omarchy-shell mike.claude-sessions jump     # focus the session waiting longest
 omarchy-shell mike.claude-sessions toggle   # open or close the panel
 omarchy-shell mike.claude-sessions status   # print the summary
+omarchy-shell mike.claude-sessions preview 14  # a minute of made-up sessions, to see the panel busy
 ```
 
 ## How it works

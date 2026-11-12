@@ -26,6 +26,10 @@ Panel {
   // Items inside the panel's lazily built content, null until it first opens.
   readonly property Item panelFlick: panel.loadedContent ? panel.loadedContent.panelFlick : null
   readonly property Item rowColumn: panel.loadedContent ? panel.loadedContent.rowColumn : null
+  readonly property Item heroItem: panel.loadedContent ? panel.loadedContent.hero : null
+  readonly property Item topSeparatorItem: panel.loadedContent ? panel.loadedContent.topSeparator : null
+  readonly property Item bottomSeparatorItem: panel.loadedContent ? panel.loadedContent.bottomSeparator : null
+  readonly property Item newRowItem: panel.loadedContent ? panel.loadedContent.newSessionRow : null
 
   property var sessions: []
   property var counts: ({ needs: 0, done: 0, working: 0, watching: 0, idle: 0 })
@@ -76,28 +80,97 @@ Panel {
     return parts.length > 0 ? parts.join(" · ") : strings.t("summary.none")
   }
 
-  // Sections in the order they matter, each with its rows and their place in
-  // the keyboard order.
-  readonly property var groups: {
+  // Every session, in sections in the order they matter.
+  readonly property var sections: {
     var result = []
-    var index = 0
     for (var s = 0; s < stateOrder.length; s++) {
-      var rows = []
-      for (var i = 0; i < sessions.length; i++) {
-        if (sessions[i].state === stateOrder[s]) rows.push({ session: sessions[i], index: index++ })
-      }
-      if (rows.length > 0) result.push({ state: stateOrder[s], rows: rows })
+      var list = []
+      for (var i = 0; i < sessions.length; i++)
+        if (sessions[i].state === stateOrder[s]) list.push(sessions[i])
+      if (list.length > 0) result.push({ state: stateOrder[s], sessions: list })
     }
     return result
   }
+
+  // The panel never scrolls: the list fits the room the panel has. Rows have
+  // two lines while there's room; when there isn't, all but the ones that need
+  // you drop to one line; and if even that won't fit, the least pressing
+  // sessions fold into one "N more" row, which opens the Conversations picker.
+  readonly property real sectionGap: Style.space(12)
+  readonly property real rowGap: Style.space(4)
+  readonly property real fullRowHeight: Math.ceil(bodyMetrics.height + Style.space(1) + captionMetrics.height) + Style.spacing.rowPaddingX
+  readonly property real compactRowHeight: Math.ceil(bodyMetrics.height) + Style.spacing.rowPaddingX
+  readonly property real listRoom: {
+    var cap = panel.fittedContentHeight(100000, Style.space(560)) - panel.verticalContentInset
+    var fixed = (heroItem ? heroItem.height : 0) + (topSeparatorItem ? topSeparatorItem.height : 0)
+      + (bottomSeparatorItem ? bottomSeparatorItem.height : 0) + (newRowItem ? newRowItem.height : 0)
+      + 4 * sectionGap
+    return cap - fixed - Style.space(4)
+  }
+  readonly property var plan: {
+    var all = sections
+    var room = listRoom
+    var header = headerProbe.implicitHeight
+    function rowHeight(state, compact) { return compact && state !== "needs" ? compactRowHeight : fullRowHeight }
+    function total(compact) {
+      var h = 0
+      for (var g = 0; g < all.length; g++) {
+        h += (g > 0 ? sectionGap : 0) + header
+        for (var r = 0; r < all[g].sessions.length; r++) h += rowGap + rowHeight(all[g].state, compact)
+      }
+      return h
+    }
+    var compact = total(false) > room
+    var shown = []
+    var hidden = 0
+    if (!compact || total(true) <= room) {
+      for (var a = 0; a < all.length; a++) shown.push(all[a].sessions.length)
+    } else {
+      // Most pressing first, keeping room for the "N more" row at the end.
+      var more = sectionGap + compactRowHeight
+      var used = 0
+      var full = false
+      for (var g = 0; g < all.length; g++) {
+        var count = 0
+        while (!full && count < all[g].sessions.length) {
+          var add = rowGap + rowHeight(all[g].state, true)
+          if (count === 0) add += (used > 0 ? sectionGap : 0) + header
+          if (used + add + more > room) { full = true; break }
+          used += add
+          count++
+        }
+        shown.push(count)
+        hidden += all[g].sessions.length - count
+      }
+    }
+    var result = []
+    var index = 0
+    for (var k = 0; k < all.length; k++) {
+      if (shown[k] === 0) continue
+      var rows = []
+      for (var r = 0; r < shown[k]; r++) rows.push({ session: all[k].sessions[r], index: index++ })
+      result.push({ state: all[k].state, rows: rows })
+    }
+    return { groups: result, compact: compact, hidden: hidden }
+  }
+  readonly property var groups: plan.groups
+  readonly property bool compactRows: plan.compact
+  readonly property int hiddenCount: plan.hidden
   readonly property var orderedSessions: {
     var list = []
     for (var g = 0; g < groups.length; g++)
       for (var r = 0; r < groups[g].rows.length; r++) list.push(groups[g].rows[r].session)
     return list
   }
-  // Every session row, then the "New session" row.
-  readonly property int cursorCount: orderedSessions.length + 1
+  // The keyboard order: every session row shown, the "N more" row if there is
+  // one, then "New session".
+  readonly property int moreIndex: hiddenCount > 0 ? orderedSessions.length : -1
+  readonly property int newRowIndex: orderedSessions.length + (hiddenCount > 0 ? 1 : 0)
+  readonly property int cursorCount: newRowIndex + 1
+
+  FontMetrics { id: bodyMetrics; font.family: root.fontFamily; font.pixelSize: Style.font.body }
+  FontMetrics { id: captionMetrics; font.family: root.fontFamily; font.pixelSize: Style.font.caption }
+  PanelSectionHeader { id: headerProbe; visible: false; text: "Idle"; fontFamily: root.fontFamily }
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -111,7 +184,39 @@ Panel {
     return s.length > limit ? s.substring(0, limit) : s
   }
 
+  // `omarchy-shell mike.claude-sessions preview 14` shows made-up sessions for
+  // a minute, to see the panel crowded; then the real ones come back.
+  property double previewUntil: 0
+  property string lastLine: ""
+  function preview(count) {
+    var n = Math.max(1, Math.min(64, Number(count) || 14))
+    var states = ["needs", "needs", "done", "working", "working", "watching", "done", "idle"]
+    var names = ["Super shift C shortcut for the conversations window", "Fix the flaky payments webhook retries",
+      "RAVN landing copy pass", "Refactor the notch hover timing", "Buildr creator directory search",
+      "Contextual teaser sky shader", "Birthday scrapbook PIN lock", "Dock flares on every edge",
+      "Write the release notes", "Translate the README", "Bump Hyprland and test the Lua config"]
+    var list = []
+    for (var i = 0; i < n; i++)
+      list.push({ id: "preview-" + i, label: names[i % names.length], project: "preview", state: states[Math.min(i, states.length - 1)],
+        reason: i < 2 ? "permission" : "", detail: "", since: Date.now() - i * 420000, window: "", tmux: false })
+    showLine(JSON.stringify({ sessions: list }))
+    previewUntil = Date.now() + 60000
+    previewEnd.restart()
+  }
+  Timer {
+    id: previewEnd
+    interval: 60000
+    onTriggered: { root.previewUntil = 0; if (root.lastLine !== "") root.showLine(root.lastLine) }
+  }
+
+  // Every line from the collector is kept; a preview only changes what's shown.
   function applyLine(line) {
+    lastLine = line
+    if (Date.now() < previewUntil) return
+    showLine(line)
+  }
+
+  function showLine(line) {
     var data
     try { data = JSON.parse(line) } catch (e) { return }
     if (!data || !Array.isArray(data.sessions)) return
@@ -218,7 +323,14 @@ Panel {
 
   function activateCursor() {
     if (cursorIndex < orderedSessions.length) focusSession(orderedSessions[cursorIndex])
+    else if (cursorIndex === moreIndex) showAll()
     else newSession()
+  }
+
+  // Every conversation, in the Super+Shift+C picker (from the notch plugin).
+  function showAll() {
+    Quickshell.execDetached(["sh", "-c", "command -v claude-conversations >/dev/null 2>&1 && exec omarchy-launch-or-focus-tui --app-id=org.omarchy.claude-conversations claude-conversations"])
+    close()
   }
 
   function setCursor(index) {
@@ -321,6 +433,13 @@ Panel {
     function toggle(): void { root.toggle() }
     function jump(): string { return root.jump() }
     function status(): string { return root.summary }
+    function preview(count: int): void { root.preview(count) }
+    // How the list is fitted right now (for testing).
+    function layout(): string {
+      return JSON.stringify({ room: root.listRoom, fullRow: root.fullRowHeight, compactRow: root.compactRowHeight,
+        header: headerProbe.implicitHeight, compact: root.compactRows, shown: root.orderedSessions.length,
+        hidden: root.hiddenCount, loaded: !!root.heroItem })
+    }
   }
 
   // ----------------------------------------------------------------- bar
@@ -376,6 +495,10 @@ Panel {
       id: keyCatcher
       property alias panelFlick: panelFlick
       property alias rowColumn: rowColumn
+      property alias hero: hero
+      property alias topSeparator: topSeparator
+      property alias bottomSeparator: bottomSeparator
+      property alias newSessionRow: newRow
       implicitHeight: column.implicitHeight
       anchors.fill: parent
       onMoveRequested: function(dx, dy) {
@@ -397,8 +520,9 @@ Panel {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
-        interactive: contentHeight > height
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        // The list is fitted to the panel (see `plan`), so this never needs
+        // to scroll, and shows no scroll bar.
+        interactive: contentHeight > height + 1
 
         Column {
           id: column
@@ -406,6 +530,7 @@ Panel {
           spacing: Style.space(12)
 
           PanelHero {
+            id: hero
             width: parent.width
             title: strings.t("title")
             meta: root.received ? root.summary : strings.t("starting")
@@ -423,6 +548,7 @@ Panel {
           }
 
           PanelSeparator {
+            id: topSeparator
             visible: root.anySessions
             foreground: root.foreground
           }
@@ -439,7 +565,8 @@ Panel {
                 var row = group ? group.rowAt(index) : null
                 if (row) return row
               }
-              return index === root.orderedSessions.length ? newRow : null
+              if (index === root.moreIndex) return moreRow
+              return index === root.newRowIndex ? newRow : null
             }
 
             Repeater {
@@ -479,6 +606,12 @@ Panel {
                 }
               }
             }
+
+            MoreRow {
+              id: moreRow
+              visible: root.hiddenCount > 0
+              width: parent.width
+            }
           }
 
           Text {
@@ -492,7 +625,7 @@ Panel {
             horizontalAlignment: Text.AlignHCenter
           }
 
-          PanelSeparator { foreground: root.foreground }
+          PanelSeparator { id: bottomSeparator; foreground: root.foreground }
 
           NewSessionRow {
             id: newRow
@@ -554,6 +687,7 @@ Panel {
         }
 
         Text {
+          visible: !root.compactRows || sessionRow.session.state === "needs"
           textFormat: Text.PlainText
           Layout.fillWidth: true
           text: root.metaLine(sessionRow.session)
@@ -566,9 +700,51 @@ Panel {
     }
   }
 
+  component MoreRow: CursorSurface {
+    id: moreSessionRow
+    readonly property int rowIndex: root.moreIndex
+
+    hasCursor: root.cursorActive && root.cursorIndex === rowIndex
+    foreground: root.foreground
+    implicitHeight: moreText.implicitHeight + Style.spacing.rowPaddingX
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: root.setCursor(moreSessionRow.rowIndex)
+      onClicked: root.showAll()
+    }
+
+    RowLayout {
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(10)
+      spacing: Style.space(10)
+
+      RowGlyph {
+        text: "…"
+        color: root.dim
+      }
+
+      Text {
+        id: moreText
+        textFormat: Text.PlainText
+        Layout.fillWidth: true
+        text: strings.t("more").arg(Commons.I18n.formatNumber(root.hiddenCount))
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        elide: Text.ElideRight
+      }
+    }
+  }
+
   component NewSessionRow: CursorSurface {
     id: newSessionRow
-    readonly property int rowIndex: root.orderedSessions.length
+    readonly property int rowIndex: root.newRowIndex
 
     hasCursor: root.cursorActive && root.cursorIndex === rowIndex
     foreground: root.foreground

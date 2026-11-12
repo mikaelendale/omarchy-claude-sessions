@@ -4,6 +4,7 @@
   "empty": "No Claude Code sessions running",
   "newSession": "New session",
   "newSessionHint": "Start Claude Code in a new terminal",
+  "more": "%1 more · show all",
   "noWindow": "no window",
   "inTmux": "in tmux",
 
