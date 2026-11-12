@@ -1,0 +1,39 @@
+{
+  "title": "Claude Code",
+  "starting": "Checking sessions…",
+  "empty": "No Claude Code sessions running",
+  "newSession": "New session",
+  "newSessionHint": "Start Claude Code in a new terminal",
+  "noWindow": "no window",
+  "inTmux": "in tmux",
+
+  "state.needs": "Needs you",
+  "state.done": "Your turn",
+  "state.working": "Working",
+  "state.watching": "Watching",
+  "state.idle": "Idle",
+
+  "reason.permission": "Needs permission",
+  "reason.approval": "Has a plan to approve",
+  "reason.question": "Has a question",
+  "reason.dialog": "Has a dialog open",
+  "reason.other": "Needs you: %1",
+
+  "detail.done": "Finished",
+  "detail.working": "Working",
+  "detail.watching": "Background task running",
+  "detail.idle": "Idle",
+  "detail.idleRaw": "Idle (%1)",
+
+  "summary.needs": { "one": "%1 needs you", "other": "%1 need you" },
+  "summary.done": { "one": "%1 finished", "other": "%1 finished" },
+  "summary.working": { "one": "%1 working", "other": "%1 working" },
+  "summary.watching": { "one": "%1 watching", "other": "%1 watching" },
+  "summary.idle": { "one": "%1 idle", "other": "%1 idle" },
+  "summary.none": "No sessions running",
+
+  "ago.now": "just now",
+  "ago.minutes": "%1m",
+  "ago.hours": "%1h",
+  "ago.days": "%1d"
+}
