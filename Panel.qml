@@ -30,7 +30,7 @@ Panel {
   property var sessions: []
   property var counts: ({ needs: 0, done: 0, working: 0, watching: 0, idle: 0 })
   property bool received: false
-  property int spinFrame: 0
+  property real markAngle: 0
   property double nowMs: Date.now()
   property bool cursorActive: false
   property int cursorIndex: 0
@@ -44,10 +44,21 @@ Panel {
   readonly property int doneCount: counts.done || 0
   readonly property bool anyWorking: (counts.working || 0) > 0
   readonly property bool anySessions: sessions.length > 0
-  readonly property bool spinning: anyWorking && !Style.reduceMotion
-  readonly property string workGlyph: spinning ? (spinFrame === 0 ? "◐" : "◑") : "✳"
+  // Claude's ✳ mark. The bar font has no ✳ of its own, and Qt's fallback
+  // picks the colour emoji font for it (a green square), even with U+FE0E,
+  // so the mark names a text font that has it.
+  readonly property string mark: "✳"
+  readonly property string markFont: {
+    var families = Qt.fontFamilies()
+    var wanted = ["Noto Sans Symbols 2", "Adwaita Mono", "DejaVu Sans"]
+    for (var i = 0; i < wanted.length; i++)
+      if (families.indexOf(wanted[i]) >= 0) return wanted[i]
+    return fontFamily
+  }
+  // The mark turns while something works; it holds still when a session
+  // needs you, so the urgent colour and count read clearly.
+  readonly property bool spinning: anyWorking && needsCount === 0 && !Style.reduceMotion
 
-  readonly property string barGlyph: needsCount === 0 && anyWorking ? workGlyph : "✳"
   readonly property color barIconColor: needsCount > 0
     ? urgent
     : (anySessions ? barForeground : Qt.darker(barForeground, 1.55))
@@ -162,7 +173,7 @@ Panel {
   }
 
   function stateGlyph(state) {
-    if (state === "working") return workGlyph
+    if (state === "working") return mark
     if (state === "watching") return "◉"
     if (state === "idle") return "○"
     return "●"
@@ -257,11 +268,41 @@ Panel {
 
   Component.onCompleted: if (pluginDir !== "") collector.running = true
 
-  Timer {
-    interval: 960
-    repeat: true
-    running: root.spinning
-    onTriggered: root.spinFrame = 1 - root.spinFrame
+  // One slow, steady turn every four seconds while working (linear, as a
+  // spinner should be). When the work stops, the mark eases on to the next
+  // upright position (✳ looks the same every 45°) instead of freezing askew.
+  onSpinningChanged: {
+    if (spinning) {
+      settle.stop()
+      spin.from = markAngle % 360
+      spin.to = spin.from + 360
+      spin.restart()
+    } else {
+      spin.stop()
+      var angle = markAngle % 360
+      if (angle === 0) return
+      settle.from = angle
+      settle.to = Math.ceil(angle / 45) * 45
+      settle.restart()
+    }
+  }
+  Component.onDestruction: { spin.stop(); settle.stop() }
+
+  NumberAnimation {
+    id: spin
+    target: root
+    property: "markAngle"
+    duration: 4000
+    loops: Animation.Infinite
+  }
+
+  NumberAnimation {
+    id: settle
+    target: root
+    property: "markAngle"
+    duration: Style.duration(240)
+    easing.type: Easing.OutCubic
+    onFinished: root.markAngle = 0
   }
 
   Timer {
@@ -288,7 +329,27 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.barGlyph
+    // The bar fits this text to its icon size by the glyph's ink. It turns
+    // through a Rotation transform about that ink's centre: the bar re-measures
+    // an icon when its `rotation` property changes, which would make it pulse.
+    iconComponent: Component {
+      Text {
+        id: barMark
+        textFormat: Text.PlainText
+        text: root.mark
+        color: root.barIconColor
+        font.family: root.markFont
+        font.pixelSize: 32
+
+        TextMetrics { id: barInk; font: barMark.font; text: barMark.text }
+
+        transform: Rotation {
+          origin.x: barInk.tightBoundingRect.x + barInk.tightBoundingRect.width / 2
+          origin.y: barMark.baselineOffset + barInk.tightBoundingRect.y + barInk.tightBoundingRect.height / 2
+          angle: root.markAngle
+        }
+      }
+    }
     foreground: root.barIconColor
     labelText: root.barLabel
     tooltipText: root.opened ? "" : root.summary
@@ -353,9 +414,9 @@ Panel {
             iconComponent: Component {
               Text {
                 textFormat: Text.PlainText
-                text: root.barGlyph
+                text: root.mark
                 color: root.needsCount > 0 ? root.urgent : (root.anySessions ? root.foreground : root.dim)
-                font.family: root.fontFamily
+                font.family: root.markFont
                 font.pixelSize: Style.font.display
               }
             }
@@ -469,8 +530,12 @@ Panel {
       spacing: Style.space(10)
 
       RowGlyph {
+        readonly property bool working: sessionRow.session.state === "working"
         text: root.stateGlyph(sessionRow.session.state)
         color: root.stateColor(sessionRow.session.state)
+        fontFamily: working ? root.markFont : root.fontFamily
+        // OpticalGlyph centres the ink in its box, so this turns it in place.
+        rotation: working ? root.markAngle : 0
       }
 
       ColumnLayout {

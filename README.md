@@ -8,9 +8,11 @@ An Omarchy bar widget that shows every Claude Code session on this machine. At a
 |---|---|
 | `✳` dimmed | No sessions running |
 | `✳` | Sessions open, all idle |
-| `◐` `◑` alternating | Something is working |
-| `✳ 2` in the urgent colour | Two sessions need you (permission, a question, a plan to approve) |
-| `✳ 1` | One session finished while you were elsewhere, and it's your turn |
+| `✳` turning slowly | Something is working |
+| `2 ✳` in the urgent colour, still | Two sessions need you (permission, a question, a plan to approve) |
+| `1 ✳` | One session finished while you were elsewhere, and it's your turn |
+
+The mark is drawn with Noto Sans Symbols 2, falling back to Adwaita Mono or DejaVu Sans. The bar's own font has no ✳, and Qt would otherwise draw it as the green colour emoji. When animations are turned off (`omarchy toggle animations`), the mark doesn't turn.
 
 Hover over the icon for a summary such as "1 needs you · 2 working".
 
