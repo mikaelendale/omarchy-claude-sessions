@@ -1,6 +1,6 @@
 # Claude Sessions
 
-An Omarchy bar widget that shows every Claude Code session on this machine. At a glance you can see whether a session is working, watching a background task, or waiting on you.
+An Omarchy bar widget that shows every Claude Code session on this machine. At a glance you can see whether a session is working, waiting on you, or done and waiting for your next message.
 
 ## What the icon shows
 
@@ -18,7 +18,7 @@ Hover over the icon for a summary such as "1 needs you · 2 working".
 
 ## Clicks
 
-- **Left:** open the panel, with sessions grouped as Needs you, Your turn, Working, Watching and Idle. Pick a session (mouse, or arrows and Enter) to jump to its terminal window.
+- **Left:** open the panel, with sessions grouped as Needs you, Your turn, Working and Idle. Pick a session (mouse, or arrows and Enter) to jump to its terminal window.
 - **Right:** jump straight to the session that has waited on you longest.
 - **Middle:** start a new session with `omarchy agent`.
 
@@ -42,6 +42,8 @@ omarchy-shell mike.claude-sessions preview 14  # a minute of made-up sessions, t
 ```
 
 ## How it works
+
+A session that has finished its reply but left something running, such as a dev server, counts as your turn (or idle), not as working. Its row says "background task running".
 
 Claude Code keeps a small file for each running session in `~/.claude/sessions/<pid>.json`. That file holds a live `status`:
 

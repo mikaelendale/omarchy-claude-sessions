@@ -6,8 +6,13 @@ Claude Code keeps one small file per running session in
 
   busy     working
   waiting  needs the user; `waitingFor` says why
-  shell    idle, but a background task (a monitor, a long command) still runs
+  shell    the model has stopped, but a background task it started (a dev
+           server, a monitor, a long command) is still running
   idle     idle
+
+A `shell` session is shown as idle (or "your turn" if it just finished while
+you were elsewhere) with the reason "background": the model is done
+responding, and a dev server left running is not Claude still working.
 
 This helper reads those files, drops the ones whose process is gone, matches
 each session to its terminal window through Hyprland, and prints one JSON line
@@ -118,6 +123,16 @@ class ProcTable:
         if not fields or len(fields) < 20:
             return None
         return fields[19]  # field 22: starttime
+
+    def command(self, pid):
+        """The process name from /proc/<pid>/stat, e.g. 'claude' or 'foot'."""
+        try:
+            with open(os.path.join(self.root, str(pid), "stat"), "rb") as handle:
+                raw = handle.read(4096).decode("utf-8", "replace")
+        except OSError:
+            return ""
+        start, end = raw.find("("), raw.rfind(")")
+        return raw[start + 1 : end] if 0 <= start < end else ""
 
     def parent(self, pid):
         fields = self._stat_fields(pid)
@@ -369,12 +384,19 @@ def read_record(path):
     return data if isinstance(data, dict) else None
 
 
+def session_name(record):
+    """The session's own name, unless it is a bare id prefix ('c578b3cb')."""
+    name = clean_text(record.get("name"), MAX_LABEL)
+    return "" if re.fullmatch(r"[0-9a-f]{8}", name) else name
+
+
 def map_status(status, waiting_for):
     """(state, reason, detail) for a raw status."""
     if status == "busy":
         return "working", "", ""
     if status == "shell":
-        return "watching", "", ""
+        # The turn is over; only something it started is still running.
+        return "idle", "background", ""
     if status == "waiting":
         raw = waiting_for if isinstance(waiting_for, str) else ""
         reason = REASONS.get(raw)
@@ -416,6 +438,11 @@ class Collector:
                 return self.windows[current]
             parent = self.proc.parent(current)
             if not parent or parent <= 1 or parent == current:
+                return None
+            # Background sessions run under Claude's daemon, which the session
+            # that started it spawned. Walking past another Claude process
+            # would hand them that session's window and title.
+            if self.proc.command(parent) == "claude":
                 return None
             current = parent
         return None
@@ -498,7 +525,7 @@ class Collector:
             project = clean_text(os.path.basename(cwd.rstrip("/")) or cwd, 40)
             label = title_label(window["title"]) if window else ""
             if not label:
-                label = clean_text(record.get("name"), MAX_LABEL) or project or str(pid)
+                label = session_name(record) or project or str(pid)
 
             sessions.append({
                 "id": key,
@@ -534,7 +561,7 @@ class Collector:
         cwd = record.get("cwd") if isinstance(record.get("cwd"), str) else ""
         project = clean_text(os.path.basename(cwd.rstrip("/")), 40)
         label = title_label(window["title"]) if window else ""
-        label = label or clean_text(record.get("name"), MAX_LABEL) or project or "Claude Code"
+        label = label or session_name(record) or project or "Claude Code"
         what = detail or REASON_TEXT.get(reason, REASON_TEXT["other"])
         body = what + (" · " + project if project else "")
         return label, body

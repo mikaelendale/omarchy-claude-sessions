@@ -261,6 +261,8 @@ Panel {
       if (session.reason !== "other" && session.reason !== "") return strings.t("reason." + session.reason, strings.t("state.needs"))
       return session.detail !== "" ? strings.t("reason.other").arg(session.detail) : strings.t("state.needs")
     }
+    if (session.reason === "background")
+      return strings.t(session.state === "done" ? "detail.doneBackground" : "detail.background")
     if (session.state === "idle") return session.detail !== "" ? strings.t("detail.idleRaw").arg(session.detail) : ""
     if (session.state === "working") return ""
     return strings.t("detail." + session.state)

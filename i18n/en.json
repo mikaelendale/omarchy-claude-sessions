@@ -23,6 +23,8 @@
   "detail.done": "Finished",
   "detail.working": "Working",
   "detail.watching": "Background task running",
+  "detail.background": "Background task running",
+  "detail.doneBackground": "Finished, background task running",
   "detail.idle": "Idle",
   "detail.idleRaw": "Idle (%1)",
 

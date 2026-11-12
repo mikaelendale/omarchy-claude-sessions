@@ -90,7 +90,7 @@ class StatusMapping(Fixture):
     def test_each_status(self):
         cases = [
             ("busy", None, "working", ""),
-            ("shell", None, "watching", ""),
+            ("shell", None, "idle", "background"),
             ("idle", None, "idle", ""),
             ("waiting", "permission prompt", "needs", "permission"),
             ("waiting", "sandbox request", "needs", "permission"),
@@ -125,8 +125,8 @@ class StatusMapping(Fixture):
             self.process(pid)
             self.session(pid, status, "permission prompt" if status == "waiting" else None)
         states = [row["state"] for row in self.tick()["sessions"]]
-        self.assertEqual(states, ["needs", "working", "watching", "idle"])
-        self.assertEqual(self.tick()["counts"], {"needs": 1, "done": 0, "working": 1, "watching": 1, "idle": 1})
+        self.assertEqual(states, ["needs", "working", "idle", "idle"])
+        self.assertEqual(self.tick()["counts"], {"needs": 1, "done": 0, "working": 1, "watching": 0, "idle": 2})
 
 
 class Liveness(Fixture):
@@ -196,6 +196,18 @@ class Windows(Fixture):
         row = self.only()
         self.assertEqual((row["window"], row["label"]), ("", "work-100"))
 
+    def test_background_session_does_not_borrow_its_starters_window(self):
+        # foot (80) <- claude (90, the interactive session) <- claude daemon
+        # (95) <- bg-pty-host (97) <- background claude (120)
+        self.process(90, ppid=80, comm="claude")
+        self.process(95, ppid=90, comm="claude")
+        self.process(97, ppid=95, comm="claude")
+        self.process(120, ppid=97, comm="claude")
+        self.session(120, "busy", kind="bg", name="c578b3cb")
+        row = self.only()
+        self.assertEqual(row["window"], "")
+        self.assertEqual(row["label"], "project-120")
+
     def test_markup_shaped_title_stays_plain_text(self):
         self.hypr.windows[80]["title"] = "✳ <img src=\"https://example.invalid/t\"> hi"
         self.session(100, "busy")
@@ -218,6 +230,26 @@ class DoneState(Fixture):
         self.process(80, comm="foot")
         self.process(100, ppid=80)
         self.hypr.windows = {80: {"address": "0xabc", "title": "✳ Task", "workspace": "1"}}
+
+    def test_dev_server_left_running_is_your_turn_not_working(self):
+        # The model finishes its reply but leaves `next dev` running: Claude
+        # Code reports "shell". That is the end of the turn, not more work.
+        self.session(100, "busy")
+        self.assertEqual(self.only()["state"], "working")
+        self.session(100, "shell")
+        row = self.only()
+        self.assertEqual((row["state"], row["reason"]), ("done", "background"))
+        self.assertEqual(self.tick()["counts"]["working"], 0)
+        self.hypr.active = "0xabc"
+        row = self.only()
+        self.assertEqual((row["state"], row["reason"]), ("idle", "background"))
+
+    def test_dev_server_while_looking_is_plain_idle(self):
+        self.hypr.active = "0xabc"
+        self.session(100, "busy")
+        self.only()
+        self.session(100, "shell")
+        self.assertEqual(self.only()["state"], "idle")
 
     def test_finished_while_away_is_your_turn_until_focused(self):
         self.session(100, "busy")
