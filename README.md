@@ -24,7 +24,7 @@ Hover over the icon for a summary such as "1 needs you · 2 working".
 
 In the panel, `n` also starts a new session.
 
-The panel never scrolls. While there's room, each session gets two lines. When there are more sessions than fit, the rest drop to one line, except the ones that need you, which keep the line saying why. If even that won't fit, the least pressing sessions fold into one "N more · show all" row, which opens the Super+Shift+C conversations picker (from the notch plugin).
+The panel never scrolls. While there's room, each session gets two lines. When there are more sessions than fit, the rest drop to one line, except the ones that need you, which keep the line saying why. If even that won't fit, the least pressing sessions fold into one "N more · show all" row, which opens the Super+Shift+C conversations picker from [omarchy-notch](https://github.com/mikaelendale/omarchy-notch), if you have it.
 
 ## Notifications
 
@@ -57,6 +57,13 @@ Claude Code keeps a small file for each running session in `~/.claude/sessions/<
 It also reads any extra Claude accounts set up with `omarchy agent account`. It uses only the Python standard library and makes no network requests.
 
 This file format belongs to Claude Code and isn't a documented API. If an update changes it, the widget shows unknown states as idle rather than breaking.
+
+## Requirements
+
+- [Omarchy](https://omarchy.org) with its Quickshell shell (the `omarchy plugin` commands)
+- [Claude Code](https://claude.com/claude-code). Tested with 2.1.322.
+- `python3`, standard library only
+- Noto Sans Symbols 2 (in `noto-fonts`) for the ✳ mark
 
 ## Install
 
