@@ -48,6 +48,10 @@ Panel {
   readonly property int doneCount: counts.done || 0
   readonly property bool anyWorking: (counts.working || 0) > 0
   readonly property bool anySessions: sessions.length > 0
+  readonly property bool onlyClaude: {
+    for (var i = 0; i < sessions.length; i++) if (sessions[i].agent !== "claude") return false
+    return true
+  }
   // Claude's ✳ mark. The bar font has no ✳ of its own, and Qt's fallback
   // picks the colour emoji font for it (a green square), even with U+FE0E,
   // so the mark names a text font that has it.
@@ -190,15 +194,20 @@ Panel {
   property string lastLine: ""
   function preview(count) {
     var n = Math.max(1, Math.min(64, Number(count) || 14))
-    var states = ["needs", "needs", "done", "working", "working", "watching", "done", "idle"]
-    var names = ["Super shift C shortcut for the conversations window", "Fix the flaky payments webhook retries",
-      "RAVN landing copy pass", "Refactor the notch hover timing", "Buildr creator directory search",
-      "Contextual teaser sky shader", "Birthday scrapbook PIN lock", "Dock flares on every edge",
-      "Write the release notes", "Translate the README", "Bump Hyprland and test the Lua config"]
+    var states = ["needs", "needs", "done", "working", "working", "working", "done", "idle"]
+    var names = ["Fix the flaky payments webhook retries", "Add dark mode to the settings page",
+      "Landing page copy pass", "Refactor the hover timing", "Speed up the search index",
+      "Port the shader to WebGPU", "Lock the admin routes behind a PIN", "Write the release notes",
+      "Translate the README", "Bump Hyprland and test the Lua config", "Clean up the CI cache"]
+    var agentsList = [["claude", "Claude Code"], ["codex", "Codex"], ["claude", "Claude Code"], ["opencode", "OpenCode"],
+      ["cursor", "Cursor"], ["claude", "Claude Code"], ["crush", "Crush"], ["qwen", "Qwen"]]
     var list = []
-    for (var i = 0; i < n; i++)
+    for (var i = 0; i < n; i++) {
+      var a = agentsList[i % agentsList.length]
       list.push({ id: "preview-" + i, label: names[i % names.length], project: "preview", state: states[Math.min(i, states.length - 1)],
-        reason: i < 2 ? "permission" : "", detail: "", since: Date.now() - i * 420000, window: "", tmux: false })
+        reason: i < 2 ? (a[0] === "claude" ? "permission" : "approval") : "", detail: "", since: Date.now() - i * 420000,
+        window: "", tmux: false, agent: a[0], agentName: a[1] })
+    }
     showLine(JSON.stringify({ sessions: list }))
     previewUntil = Date.now() + 60000
     previewEnd.restart()
@@ -237,7 +246,9 @@ Panel {
         detail: limited(s.detail, 120),
         since: Number(s.since) > 0 ? Number(s.since) : 0,
         window: window,
-        tmux: s.tmux === true
+        tmux: s.tmux === true,
+        agent: limited(s.agent || "claude", 20),
+        agentName: limited(s.agentName, 30)
       })
     }
     sessions = list
@@ -270,6 +281,7 @@ Panel {
 
   function metaLine(session) {
     var parts = []
+    if (session.agent !== "claude" && session.agentName !== "") parts.push(session.agentName)
     var what = stateLine(session)
     if (what !== "") parts.push(what)
     if (session.project !== "") parts.push(session.project)
@@ -369,7 +381,8 @@ Panel {
 
   Process {
     id: collector
-    command: ["python3", "-I", root.pluginDir + "/sessions.py", "--notify", root.notifyMode]
+    // agents.py: Claude Code (via sessions.py), Codex and the other agent CLIs.
+    command: ["python3", "-I", root.pluginDir + "/agents.py", "--notify", root.notifyMode]
     stdout: SplitParser { onRead: function(line) { root.applyLine(line) } }
     onExited: restartTimer.start()
   }
@@ -534,7 +547,7 @@ Panel {
           PanelHero {
             id: hero
             width: parent.width
-            title: strings.t("title")
+            title: root.onlyClaude ? strings.t("title") : strings.t("titleAgents")
             meta: root.received ? root.summary : strings.t("starting")
             foreground: root.foreground
             fontFamily: root.fontFamily

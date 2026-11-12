@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Mike",
   "license": "MIT",
-  "description": "Live status of every Claude Code session on this machine: working, watching a background task, or waiting on you.",
+  "description": "Live status of every coding-agent session on this machine (Claude Code, Codex, Cursor, OpenCode and more): working, waiting on you, or your turn.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Claude Sessions",
-    "description": "One icon that shows whether Claude Code is working or needs you, and a panel listing every session. Pick one to jump to its window.",
+    "description": "One icon that shows whether your coding agents are working or need you, and a panel listing every session. Pick one to jump to its window.",
     "category": "AI",
     "aliases": ["claude", "sessions", "claude-code"],
     "allowMultiple": false,

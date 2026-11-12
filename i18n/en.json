@@ -1,5 +1,6 @@
 {
   "title": "Claude Code",
+  "titleAgents": "Coding agents",
   "starting": "Checking sessions…",
   "empty": "No Claude Code sessions running",
   "newSession": "New session",

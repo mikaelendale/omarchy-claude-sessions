@@ -214,10 +214,16 @@ class Hyprland:
             if not ADDRESS_RE.match(address):
                 continue
             workspace = client.get("workspace") if isinstance(client.get("workspace"), dict) else {}
+            # One process can own several windows (foot --server, Ghostty).
+            # Such a terminal's reads mix every window's output, so callers
+            # that measure them need to know.
+            shared = pid in windows
             windows[pid] = {
+                "pid": pid,
                 "address": address,
                 "title": client.get("title") if isinstance(client.get("title"), str) else "",
                 "workspace": clean_text(str(workspace.get("name", "")), 24),
+                "shared": shared,
             }
         return windows
 
