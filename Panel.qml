@@ -145,12 +145,15 @@ Panel {
       if (session.reason !== "other" && session.reason !== "") return strings.t("reason." + session.reason, strings.t("state.needs"))
       return session.detail !== "" ? strings.t("reason.other").arg(session.detail) : strings.t("state.needs")
     }
-    if (session.state === "idle" && session.detail !== "") return strings.t("detail.idleRaw").arg(session.detail)
+    if (session.state === "idle") return session.detail !== "" ? strings.t("detail.idleRaw").arg(session.detail) : ""
+    if (session.state === "working") return ""
     return strings.t("detail." + session.state)
   }
 
   function metaLine(session) {
-    var parts = [stateLine(session)]
+    var parts = []
+    var what = stateLine(session)
+    if (what !== "") parts.push(what)
     if (session.project !== "") parts.push(session.project)
     if (session.window === "") parts.push(session.tmux ? strings.t("inTmux") : strings.t("noWindow"))
     var when = ago(session.since)
@@ -465,15 +468,9 @@ Panel {
       anchors.rightMargin: Style.space(10)
       spacing: Style.space(10)
 
-      Text {
-        textFormat: Text.PlainText
+      RowGlyph {
         text: root.stateGlyph(sessionRow.session.state)
         color: root.stateColor(sessionRow.session.state)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        Layout.alignment: Qt.AlignVCenter
-        Layout.preferredWidth: Style.space(14)
-        horizontalAlignment: Text.AlignHCenter
       }
 
       ColumnLayout {
@@ -528,15 +525,10 @@ Panel {
       anchors.rightMargin: Style.space(10)
       spacing: Style.space(10)
 
-      Text {
-        textFormat: Text.PlainText
+      RowGlyph {
         text: "+"
         color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        Layout.alignment: Qt.AlignVCenter
-        Layout.preferredWidth: Style.space(14)
-        horizontalAlignment: Text.AlignHCenter
+        paintedSize: Style.space(10)
       }
 
       ColumnLayout {
@@ -565,5 +557,14 @@ Panel {
         }
       }
     }
+  }
+
+  component RowGlyph: OpticalGlyph {
+    fontFamily: root.fontFamily
+    fontSize: Style.font.icon
+    paintedSize: Style.space(12)
+    Layout.alignment: Qt.AlignVCenter
+    Layout.preferredWidth: Style.space(16)
+    Layout.preferredHeight: Style.space(16)
   }
 }

@@ -65,3 +65,5 @@ Or clone it into `~/.config/omarchy/plugins/claude-sessions` and run `omarchy pl
 python3 -I -B tests/test_sessions.py
 python3 -I sessions.py --once   # print what it sees right now
 ```
+
+After editing `Panel.qml`, run `omarchy restart shell`. The shell's live reload can keep running the previous version of the widget.
